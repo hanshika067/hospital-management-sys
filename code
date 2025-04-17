@@ -1,0 +1,188 @@
+#include <iostream>
+#include <vector>
+#include <string>
+#include <map>
+#include <queue>
+#include <ctime>
+
+using namespace std;
+
+// Doctor class definition
+class Doctor {
+public:
+    int id;
+    string name;
+    string specialty;
+    float fee;
+    bool isSenior;
+
+    Doctor() : id(0), name(""), specialty(""), fee(0.0), isSenior(true) {}
+    Doctor(int id, string name, string specialty, float fee, bool isSenior = true)
+        : id(id), name(name), specialty(specialty), fee(fee), isSenior(isSenior) {}
+};
+
+// Patient class definition
+class Patient {
+public:
+    int id;
+    string name;
+    int age;
+    string disease;
+    string contact;
+    bool requiresRoom;
+    string roomType;
+    int roomNumber;  // Added room number
+    int treatedDoctorId;
+    float totalBill;
+
+    // Default constructor
+    Patient() : id(0), name(""), age(0), disease(""), contact(""), 
+                requiresRoom(false), roomType("Normal"), roomNumber(0), 
+                treatedDoctorId(0), totalBill(0) {}
+
+    // Parameterized constructor
+    Patient(int id, string name, int age, string disease, string contact, 
+            bool requiresRoom, string roomType, int roomNumber, 
+            int doctorId, float bill)
+        : id(id), name(name), age(age), disease(disease), contact(contact),
+          requiresRoom(requiresRoom), roomType(roomType), roomNumber(roomNumber), 
+          treatedDoctorId(doctorId), totalBill(bill) {}
+
+    void display(const map<int, Doctor>& doctorList) const {
+        cout << "ID: " << id << "\nName: " << name << "\nAge: " << age
+             << "\nDisease: " << disease << "\nContact: " << contact
+             << "\nRoom/Ward: " << (requiresRoom ? roomType + " (Room Number: " + to_string(roomNumber) + ")" : "None")
+             << "\nTreated by Doctor: " << doctorList.at(treatedDoctorId).name
+             << " (" << doctorList.at(treatedDoctorId).specialty
+             << (doctorList.at(treatedDoctorId).isSenior ? ", Senior" : ", Junior") << ")"
+             << "\nTotal Bill: $" << totalBill << "\n";
+    }
+};
+
+// Structure to hold deleted patient information along with deletion time
+struct DischargedPatient {
+    int id;
+    time_t deletionTime;
+};
+
+// Hospital Management System
+class HospitalManagementSystem {
+private:
+    vector<Patient> patients;
+    map<int, Doctor> doctors;
+    queue<DischargedPatient> dischargedPatients;
+    int nextRoomNumber; // To keep track of the next available room number
+
+    Patient* findPatientById(int id) {
+        for (auto& patient : patients) {
+            if (patient.id == id) return &patient;
+        }
+        return nullptr;
+    }
+
+public:
+    HospitalManagementSystem() : nextRoomNumber(101) { // Starting room number
+        // Initialize doctor list
+        doctors[1] = Doctor(1, "Dr. Smith", "Cardiologist", 300.0, true);
+        doctors[2] = Doctor(2, "Dr. Taylor", "Neurologist", 350.0, false);
+        doctors[3] = Doctor(3, "Dr. Adams", "Orthopedic", 200.0, true);
+    }
+
+    void addPatient(int id, string name, int age, string disease, string contact, bool requiresRoom, string roomType, int doctorId) {
+        if (findPatientById(id) != nullptr) {
+            cout << "Patient with ID " << id << " already exists.\n";
+            return;
+        }
+        if (doctors.find(doctorId) == doctors.end()) {
+            cout << "Doctor with ID " << doctorId << " not found.\n";
+            return;
+        }
+        float bill = doctors[doctorId].fee;
+        int roomNumber = 0;
+
+        if (requiresRoom) {
+            bill += (roomType == "Normal" ? 100 : 200); // Room fees
+            roomNumber = nextRoomNumber++; // Allocate the next available room number
+        }
+
+        patients.push_back(Patient(id, name, age, disease, contact, requiresRoom, roomType, roomNumber, doctorId, bill));
+        cout << "Patient added successfully.\n";
+    }
+
+    void viewPatients() const {
+        if (patients.empty()) {
+            cout << "No patients in the system.\n";
+            return;
+        }
+        for (const auto& patient : patients) {
+            patient.display(doctors);
+            cout << "----------------------\n";
+        }
+    }
+
+    void deletePatient(int id) {
+        for (auto it = patients.begin(); it != patients.end(); ++it) {
+            if (it->id == id) {
+                dischargedPatients.push({id, time(0)}); // Record deletion time
+                patients.erase(it);
+                cout << "Patient with ID " << id << " discharged.\n";
+                return;
+            }
+        }
+        cout << "Patient not found.\n";
+    }
+
+    void searchPatient(int id) {
+        removeOldDischargedRecords();
+        Patient* patient = findPatientById(id);
+        if (patient) {
+            patient->display(doctors);
+        } else if (isPatientDischarged(id)) {
+            cout << "Patient with ID " << id << " has been discharged.\n";
+        } else {
+            cout << "Patient with ID " << id << " not found.\n";
+        }
+    }
+
+    void showDoctorList() const {
+        cout << "Available Doctors:\n";
+        for (const auto& [id, doctor] : doctors) {
+            cout << "ID: " << id << ", Name: " << doctor.name << ", Specialty: " << doctor.specialty
+                 << (doctor.isSenior ? ", Senior" : ", Junior") << ", Fee: $" << doctor.fee << "\n";
+        }
+    }
+
+private:
+    void removeOldDischargedRecords() {
+        time_t currentTime = time(0);
+        const int twoMonthsInSeconds = 60 * 60 * 24 * 30 * 2; // Approximately 2 months
+
+        while (!dischargedPatients.empty()) {
+            DischargedPatient& dischargedPatient = dischargedPatients.front();
+            if (difftime(currentTime, dischargedPatient.deletionTime) > twoMonthsInSeconds) {
+                dischargedPatients.pop();
+            } else {
+                break;
+            }
+        }
+    }
+
+    bool isPatientDischarged(int id) const {
+        queue<DischargedPatient> tempQueue = dischargedPatients;
+        while (!tempQueue.empty()) {
+            if (tempQueue.front().id == id) {
+                return true;
+            }
+            tempQueue.pop();
+        }
+        return false;
+    }
+};
+
+int main() {
+    HospitalManagementSystem hms;
+    int choice, id, age, doctorId;
+    string name, disease, contact, roomType;
+    bool requiresRoom
+::contentReference[oaicite:2]{index=2}
+ 
